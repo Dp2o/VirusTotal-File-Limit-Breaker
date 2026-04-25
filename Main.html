@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VT Split — VirusTotal File Splitter</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#0d0e11;--surface:#13151a;--surface2:#1c1f26;
+    --border:rgba(255,255,255,0.08);--border2:rgba(255,255,255,0.15);
+    --accent:#00e5a0;--accent2:#00b87a;--accent-dim:rgba(0,229,160,0.12);
+    --text:#f0f2f5;--muted:#8891a0;
+    --danger:#ff4f4f;--danger-dim:rgba(255,79,79,0.1);
+    --warn:#ffb84f;--warn-dim:rgba(255,184,79,0.08);
+    --info:#4e8cff;--info-dim:rgba(78,140,255,0.1);
+    --mono:'Space Mono',monospace;--sans:'Syne',sans-serif;
+  }
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:3rem 1.5rem 4rem;}
+  .grid-bg{position:fixed;inset:0;z-index:0;background-image:linear-gradient(rgba(0,229,160,0.03) 1px,transparent 1px),linear-gradient(90deg,rgba(0,229,160,0.03) 1px,transparent 1px);background-size:48px 48px;pointer-events:none;}
+  .wrap{position:relative;z-index:1;width:100%;max-width:700px;}
+  header{text-align:center;margin-bottom:2.5rem;}
+  .logo{display:inline-flex;align-items:center;gap:10px;font-family:var(--mono);font-size:12px;letter-spacing:0.1em;text-transform:uppercase;color:var(--accent);margin-bottom:1.25rem;}
+  .logo-dot{width:8px;height:8px;border-radius:50%;background:var(--accent);animation:pulse 2s ease-in-out infinite;}
+  @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.5;transform:scale(0.8)}}
+  h1{font-size:clamp(2rem,6vw,3.2rem);font-weight:800;line-height:1.05;letter-spacing:-0.03em;margin-bottom:0.6rem;}
+  h1 span{color:var(--accent);}
+  .tagline{font-family:var(--mono);font-size:12px;color:var(--muted);letter-spacing:0.02em;}
+
+  .api-section{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:1.25rem;margin-bottom:1.25rem;}
+  .api-header{display:flex;align-items:center;gap:8px;margin-bottom:0.75rem;}
+  .api-title{font-family:var(--mono);font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);}
+  .api-status{margin-left:auto;font-family:var(--mono);font-size:11px;padding:2px 10px;border-radius:99px;}
+  .api-status.ok{background:var(--accent-dim);color:var(--accent);border:1px solid rgba(0,229,160,0.2);}
+  .api-status.bad{background:var(--danger-dim);color:var(--danger);border:1px solid rgba(255,79,79,0.2);}
+  .api-status.idle{background:var(--surface2);color:var(--muted);border:1px solid var(--border);}
+  .api-row{display:flex;gap:8px;}
+  .api-input{flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--mono);font-size:12px;padding:9px 12px;outline:none;transition:border-color 0.2s;}
+  .api-input:focus{border-color:var(--accent);}
+  .api-input::placeholder{color:var(--muted);}
+  .btn-verify{background:var(--surface2);border:1px solid var(--border2);border-radius:8px;color:var(--accent);font-family:var(--mono);font-size:12px;padding:9px 16px;cursor:pointer;white-space:nowrap;transition:background 0.15s;}
+  .btn-verify:hover{background:var(--accent-dim);}
+  .btn-verify:disabled{opacity:0.4;cursor:not-allowed;}
+  .quota-row{margin-top:10px;font-family:var(--mono);font-size:11px;color:var(--muted);display:none;gap:16px;flex-wrap:wrap;}
+  .quota-row.show{display:flex;}
+  .quota-item{display:flex;align-items:center;gap:5px;}
+  .qdot{width:5px;height:5px;border-radius:50%;background:var(--accent);}
+
+  .drop-zone{border:1.5px dashed var(--border2);border-radius:16px;background:var(--surface);padding:2.5rem 2rem;text-align:center;cursor:pointer;transition:all 0.2s;position:relative;overflow:hidden;margin-bottom:1.25rem;}
+  .drop-zone::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at 50% 100%,var(--accent-dim),transparent 70%);opacity:0;transition:opacity 0.3s;}
+  .drop-zone:hover,.drop-zone.dragging{border-color:var(--accent);}
+  .drop-zone:hover::before,.drop-zone.dragging::before{opacity:1;}
+  .drop-icon{width:52px;height:52px;margin:0 auto 1rem;border:1.5px solid var(--border2);border-radius:14px;display:flex;align-items:center;justify-content:center;background:var(--surface2);transition:border-color 0.2s;}
+  .drop-zone:hover .drop-icon{border-color:var(--accent);}
+  .drop-icon svg{width:24px;height:24px;stroke:var(--accent);fill:none;stroke-width:1.8;}
+  .drop-title{font-size:1rem;font-weight:600;margin-bottom:0.3rem;}
+  .drop-sub{font-family:var(--mono);font-size:12px;color:var(--muted);}
+  #file-input{display:none;}
+
+  .file-info{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1rem 1.25rem;margin-bottom:1.25rem;display:none;}
+  .file-info.show{display:block;}
+  .fi-name{font-weight:600;font-size:0.95rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:0.3rem;}
+  .fi-meta{font-family:var(--mono);font-size:12px;color:var(--muted);display:flex;gap:1.5rem;flex-wrap:wrap;}
+  .fi-meta span{display:flex;align-items:center;gap:5px;}
+  .dot-accent{width:6px;height:6px;border-radius:50%;background:var(--accent);flex-shrink:0;}
+
+  .config-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:1.25rem;}
+  .config-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1rem 1.25rem;}
+  .config-label{font-family:var(--mono);font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);margin-bottom:0.5rem;}
+  .config-select,.config-input{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--mono);font-size:13px;padding:8px 10px;outline:none;transition:border-color 0.2s;-webkit-appearance:none;}
+  .config-select:focus,.config-input:focus{border-color:var(--accent);}
+
+  .scan-mode-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:1.25rem;}
+  .mode-card{background:var(--surface);border:1.5px solid var(--border);border-radius:12px;padding:1rem 1.25rem;cursor:pointer;transition:border-color 0.2s,background 0.2s;}
+  .mode-card.active{border-color:var(--accent);background:var(--accent-dim);}
+  .mode-title{font-size:0.9rem;font-weight:600;margin-bottom:3px;}
+  .mode-sub{font-family:var(--mono);font-size:11px;color:var(--muted);line-height:1.5;}
+  .mode-card.active .mode-sub{color:var(--accent2);}
+
+  .btn-split{width:100%;padding:1rem;background:var(--accent);color:#000;font-family:var(--sans);font-size:1rem;font-weight:800;letter-spacing:0.02em;border:none;border-radius:12px;cursor:pointer;transition:background 0.15s,transform 0.1s;margin-bottom:1.5rem;text-transform:uppercase;}
+  .btn-split:hover{background:#00ffb5;}
+  .btn-split:active{transform:scale(0.99);}
+  .btn-split:disabled{background:var(--surface2);color:var(--muted);cursor:not-allowed;}
+
+  .progress-wrap{display:none;margin-bottom:1.5rem;}
+  .progress-wrap.show{display:block;}
+  .progress-label{font-family:var(--mono);font-size:12px;color:var(--muted);margin-bottom:8px;display:flex;justify-content:space-between;}
+  .progress-bar-bg{height:6px;background:var(--surface2);border-radius:99px;overflow:hidden;}
+  .progress-bar-fill{height:100%;background:var(--accent);border-radius:99px;width:0%;transition:width 0.2s;}
+
+  .chunks-section{display:none;}
+  .chunks-section.show{display:block;}
+  .section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;}
+  .section-title{font-size:0.85rem;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);}
+  .badge{font-family:var(--mono);font-size:11px;background:var(--accent-dim);color:var(--accent);padding:3px 10px;border-radius:99px;border:1px solid rgba(0,229,160,0.2);}
+  .chunk-list{display:flex;flex-direction:column;gap:8px;margin-bottom:1.25rem;}
+
+  .chunk-item{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:0.85rem 1rem;transition:border-color 0.15s;}
+  .chunk-item:hover{border-color:var(--border2);}
+  .chunk-top{display:flex;align-items:center;gap:10px;}
+  .chunk-num{font-family:var(--mono);font-size:11px;color:var(--accent);width:28px;flex-shrink:0;text-align:right;}
+  .chunk-name{font-family:var(--mono);font-size:12px;color:var(--text);flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .chunk-size{font-family:var(--mono);font-size:11px;color:var(--muted);flex-shrink:0;}
+  .chunk-actions{display:flex;gap:6px;flex-shrink:0;}
+  .btn-dl,.btn-scan-one{background:var(--surface2);border:1px solid var(--border);border-radius:7px;color:var(--accent);font-family:var(--mono);font-size:11px;padding:5px 10px;cursor:pointer;transition:background 0.15s,border-color 0.15s;white-space:nowrap;text-decoration:none;display:inline-block;}
+  .btn-dl:hover,.btn-scan-one:hover{background:var(--accent-dim);border-color:rgba(0,229,160,0.3);}
+  .btn-scan-one:disabled{opacity:0.4;cursor:not-allowed;}
+
+  .scan-result{margin-top:10px;display:none;}
+  .scan-result.show{display:block;}
+  .scan-bar{height:4px;border-radius:99px;background:var(--surface2);overflow:hidden;margin-bottom:8px;}
+  .scan-bar-fill{height:100%;border-radius:99px;transition:width 0.3s;}
+  .scan-stats{display:flex;gap:12px;flex-wrap:wrap;align-items:center;}
+  .scan-stat{font-family:var(--mono);font-size:11px;}
+  .stat-clean{color:var(--accent);}
+  .stat-malicious{color:var(--danger);}
+  .scan-status-msg{font-family:var(--mono);font-size:11px;color:var(--muted);}
+  .vt-link{font-family:var(--mono);font-size:11px;color:var(--info);text-decoration:none;margin-left:auto;}
+  .vt-link:hover{text-decoration:underline;}
+
+  .dl-all-btn{width:100%;padding:0.85rem;background:transparent;border:1.5px solid var(--accent);border-radius:12px;color:var(--accent);font-family:var(--sans);font-size:0.9rem;font-weight:600;letter-spacing:0.04em;cursor:pointer;transition:background 0.15s;text-transform:uppercase;margin-bottom:0.75rem;}
+  .dl-all-btn:hover{background:var(--accent-dim);}
+  .scan-all-btn{width:100%;padding:0.85rem;background:transparent;border:1.5px solid var(--info);border-radius:12px;color:var(--info);font-family:var(--sans);font-size:0.9rem;font-weight:600;letter-spacing:0.04em;cursor:pointer;transition:background 0.15s;text-transform:uppercase;margin-bottom:1.5rem;}
+  .scan-all-btn:hover{background:var(--info-dim);}
+  .scan-all-btn:disabled{opacity:0.4;cursor:not-allowed;}
+
+  .notice{font-family:var(--mono);font-size:11px;color:var(--warn);border:1px solid rgba(255,184,79,0.2);background:var(--warn-dim);border-radius:8px;padding:10px 14px;line-height:1.6;margin-bottom:0.75rem;}
+
+  .toast{position:fixed;bottom:2rem;left:50%;transform:translateX(-50%) translateY(10px);background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:10px 20px;font-family:var(--mono);font-size:12px;color:var(--accent);opacity:0;transition:opacity 0.2s,transform 0.2s;pointer-events:none;z-index:100;white-space:nowrap;}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+  footer{text-align:center;margin-top:3rem;font-family:var(--mono);font-size:11px;color:var(--muted);line-height:1.8;}
+  @media(max-width:500px){.config-row,.scan-mode-row{grid-template-columns:1fr;}}
+</style>
+</head>
+<body>
+<div class="grid-bg"></div>
+<div class="wrap">
+  <header>
+    <div class="logo"><div class="logo-dot"></div> VT Split</div>
+    <h1>Split & scan with<br><span>VirusTotal</span></h1>
+    <p class="tagline">// auto-split large files and submit each chunk to the VT API</p>
+  </header>
+
+  <div class="api-section">
+    <div class="api-header">
+      <div class="api-title">VirusTotal API Key</div>
+      <div class="api-status idle" id="api-status">not verified</div>
+    </div>
+    <div class="api-row">
+      <input class="api-input" id="api-key-input" type="password" placeholder="Paste your API key here…" autocomplete="off">
+      <button class="btn-verify" id="btn-verify">Verify</button>
+    </div>
+    <div class="quota-row" id="quota-row">
+      <div class="quota-item"><div class="qdot"></div><span id="q-user">—</span></div>
+      <div class="quota-item"><div class="qdot"></div><span id="q-daily">—</span></div>
+      <div class="quota-item"><div class="qdot"></div><span id="q-month">—</span></div>
+    </div>
+  </div>
+
+  <div class="drop-zone" id="drop-zone">
+    <input type="file" id="file-input">
+    <div class="drop-icon">
+      <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+    </div>
+    <div class="drop-title">Drop your file here</div>
+    <div class="drop-sub">or click to browse</div>
+  </div>
+
+  <div class="file-info" id="file-info">
+    <div class="fi-name" id="fi-name">—</div>
+    <div class="fi-meta">
+      <span><div class="dot-accent"></div><span id="fi-size">—</span></span>
+      <span><div class="dot-accent"></div><span id="fi-type">—</span></span>
+      <span><div class="dot-accent"></div><span id="fi-chunks">—</span></span>
+    </div>
+  </div>
+
+  <div class="config-row">
+    <div class="config-card">
+      <div class="config-label">Chunk size</div>
+      <select class="config-select" id="chunk-size">
+        <option value="31457280">30 MB (free tier)</option>
+        <option value="524288000">500 MB (Premium)</option>
+        <option value="10485760">10 MB</option>
+        <option value="5242880">5 MB (test)</option>
+      </select>
+    </div>
+    <div class="config-card">
+      <div class="config-label">Filename prefix</div>
+      <input class="config-input" id="prefix" type="text" placeholder="chunk" value="chunk">
+    </div>
+  </div>
+
+  <div class="scan-mode-row">
+    <div class="mode-card active" id="mode-auto" onclick="setMode('auto')">
+      <div class="mode-title">Auto scan</div>
+      <div class="mode-sub">Upload each chunk to VT API automatically after splitting</div>
+    </div>
+    <div class="mode-card" id="mode-manual" onclick="setMode('manual')">
+      <div class="mode-title">Manual download</div>
+      <div class="mode-sub">Split only — download chunks to upload yourself</div>
+    </div>
+  </div>
+
+  <button class="btn-split" id="btn-split" disabled>Select a file first</button>
+
+  <div class="progress-wrap" id="progress-wrap">
+    <div class="progress-label"><span id="prog-label">Processing…</span><span id="prog-pct">0%</span></div>
+    <div class="progress-bar-bg"><div class="progress-bar-fill" id="prog-fill"></div></div>
+  </div>
+
+  <div class="chunks-section" id="chunks-section">
+    <div class="section-header">
+      <div class="section-title">Chunks</div>
+      <div class="badge" id="chunk-count">0 files</div>
+    </div>
+    <div class="chunk-list" id="chunk-list"></div>
+    <button class="dl-all-btn" id="dl-all-btn">↓ Download all chunks</button>
+    <button class="scan-all-btn" id="scan-all-btn" disabled>⬡ Scan all with VirusTotal</button>
+    <div class="notice" id="rate-notice" style="display:none">⚠ Free API tier: 4 requests/minute. A 16-second delay is added between uploads to stay within limits. Do not close this tab during scanning.</div>
+    <div class="notice">⚠ Each chunk is scanned in isolation. Some threats may only be detectable in the full reassembled file. Use this as a supplementary check.</div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const VT_UPLOAD='https://www.virustotal.com/api/v3/files';
+const VT_ANALYSIS='https://www.virustotal.com/api/v3/analyses/';
+
+let selectedFile=null,generatedChunks=[],currentMode='auto',apiKey='',apiVerified=false,scanAllRunning=false;
+const $=id=>document.getElementById(id);
+
+function showToast(msg,color){
+  const t=$('toast');t.textContent=msg;t.style.color=color||'var(--accent)';
+  t.classList.add('show');setTimeout(()=>t.classList.remove('show'),3000);
+}
+function formatSize(b){
+  if(b<1024)return b+' B';if(b<1048576)return(b/1024).toFixed(1)+' KB';
+  if(b<1073741824)return(b/1048576).toFixed(1)+' MB';return(b/1073741824).toFixed(2)+' GB';
+}
+function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
+function setMode(m){
+  currentMode=m;
+  $('mode-auto').classList.toggle('active',m==='auto');
+  $('mode-manual').classList.toggle('active',m==='manual');
+  if(selectedFile)updateFileInfo();
+}
+async function sha256Blob(blob){
+  const buf=await blob.arrayBuffer();
+  const h=await crypto.subtle.digest('SHA-256',buf);
+  return Array.from(new Uint8Array(h)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+
+// API Key
+$('btn-verify').addEventListener('click',verifyKey);
+$('api-key-input').addEventListener('keydown',e=>{if(e.key==='Enter')verifyKey();});
+
+async function verifyKey(){
+  const key=$('api-key-input').value.trim();
+  if(!key)return;
+  $('btn-verify').disabled=true;$('btn-verify').textContent='…';
+  $('api-status').textContent='checking';$('api-status').className='api-status idle';
+  try{
+    const res=await fetch('https://www.virustotal.com/api/v3/users/current_user',{headers:{'x-apikey':key}});
+    if(res.status===200){
+      const data=await res.json();
+      apiKey=key;apiVerified=true;
+      $('api-status').textContent='verified ✓';$('api-status').className='api-status ok';
+      const attr=data.data?.attributes||{};
+      const quotas=attr.quotas||{};
+      const daily=quotas.api_requests_daily;
+      const monthly=quotas.api_requests_monthly;
+      $('q-user').textContent='user: '+(attr.email||data.data?.id||'unknown');
+      $('q-daily').textContent=daily?`daily: ${daily.used}/${daily.allowed}`:'daily quota n/a';
+      $('q-month').textContent=monthly?`monthly: ${monthly.used}/${monthly.allowed}`:'';
+      $('quota-row').classList.add('show');
+      updateScanBtn();showToast('API key verified!');
+    }else throw new Error('HTTP '+res.status);
+  }catch(e){
+    apiVerified=false;
+    $('api-status').textContent='invalid key';$('api-status').className='api-status bad';
+    showToast('Verification failed — check your key','var(--danger)');
+  }
+  $('btn-verify').disabled=false;$('btn-verify').textContent='Verify';
+}
+
+// File handling
+const dropZone=$('drop-zone'),fileInput=$('file-input');
+dropZone.addEventListener('click',()=>fileInput.click());
+fileInput.addEventListener('change',e=>{if(e.target.files[0])handleFile(e.target.files[0]);});
+dropZone.addEventListener('dragover',e=>{e.preventDefault();dropZone.classList.add('dragging');});
+dropZone.addEventListener('dragleave',()=>dropZone.classList.remove('dragging'));
+dropZone.addEventListener('drop',e=>{e.preventDefault();dropZone.classList.remove('dragging');if(e.dataTransfer.files[0])handleFile(e.dataTransfer.files[0]);});
+$('chunk-size').addEventListener('change',updateFileInfo);
+
+function handleFile(file){
+  selectedFile=file;generatedChunks=[];
+  $('chunks-section').classList.remove('show');
+  $('progress-wrap').classList.remove('show');
+  updateFileInfo();
+}
+function updateFileInfo(){
+  if(!selectedFile)return;
+  const cs=parseInt($('chunk-size').value);
+  const n=Math.ceil(selectedFile.size/cs);
+  $('fi-name').textContent=selectedFile.name;
+  $('fi-size').textContent=formatSize(selectedFile.size);
+  $('fi-type').textContent=selectedFile.type||'unknown type';
+  $('fi-chunks').textContent=n+' chunk'+(n!==1?'s':'');
+  $('file-info').classList.add('show');
+  $('btn-split').disabled=false;
+  $('btn-split').textContent=currentMode==='auto'?'Split & Scan with VirusTotal':'Split & Prepare Downloads';
+}
+function updateScanBtn(){
+  $('scan-all-btn').disabled=!apiVerified||generatedChunks.length===0||scanAllRunning;
+}
+
+// Split
+$('btn-split').addEventListener('click',async()=>{
+  if(!selectedFile)return;
+  if(currentMode==='auto'&&!apiVerified){showToast('Verify your API key first','var(--warn)');return;}
+  const chunkSize=parseInt($('chunk-size').value);
+  const prefix=$('prefix').value.trim()||'chunk';
+  const total=Math.ceil(selectedFile.size/chunkSize);
+  const pad=Math.max(3,String(total).length);
+  const ext=selectedFile.name.includes('.')?'.'+selectedFile.name.split('.').pop():'';
+
+  $('btn-split').disabled=true;
+  $('progress-wrap').classList.add('show');
+  $('chunks-section').classList.remove('show');
+  $('chunk-list').innerHTML='';
+  generatedChunks=[];
+
+  for(let i=0;i<total;i++){
+    const start=i*chunkSize;
+    const end=Math.min(start+chunkSize,selectedFile.size);
+    const blob=selectedFile.slice(start,end);
+    const num=String(i+1).padStart(pad,'0');
+    const name=`${prefix}_${num}_of_${String(total).padStart(pad,'0')}${ext}`;
+    $('prog-label').textContent=`Hashing chunk ${i+1} of ${total}…`;
+    const pct=Math.round(((i+1)/total)*100);
+    $('prog-fill').style.width=pct+'%';$('prog-pct').textContent=pct+'%';
+    const hash=await sha256Blob(blob);
+    generatedChunks.push({blob,name,hash,size:blob.size,index:i});
+    renderChunkItem(generatedChunks[i],i,num);
+  }
+
+  $('chunk-count').textContent=total+' file'+(total!==1?'s':'');
+  $('chunks-section').classList.add('show');
+  $('rate-notice').style.display=currentMode==='auto'?'block':'none';
+  $('prog-label').textContent='Done!';
+  $('btn-split').disabled=false;
+  $('btn-split').textContent=currentMode==='auto'?'Split & Scan with VirusTotal':'Re-split';
+  updateScanBtn();
+  showToast(currentMode==='auto'?`${total} chunks ready — click "Scan all"`:`${total} chunks ready to download`);
+});
+
+function renderChunkItem(chunk,i,num){
+  const url=URL.createObjectURL(chunk.blob);
+  const item=document.createElement('div');
+  item.className='chunk-item';item.id=`chunk-item-${i}`;
+  item.innerHTML=`
+    <div class="chunk-top">
+      <span class="chunk-num">${num}</span>
+      <span class="chunk-name" title="${chunk.name}">${chunk.name}</span>
+      <span class="chunk-size">${formatSize(chunk.size)}</span>
+      <div class="chunk-actions">
+        <a class="btn-dl" href="${url}" download="${chunk.name}">↓ DL</a>
+        <button class="btn-scan-one" id="scan-btn-${i}" data-index="${i}">⬡ Scan</button>
+      </div>
+    </div>
+    <div class="scan-result" id="scan-result-${i}">
+      <div class="scan-bar"><div class="scan-bar-fill" id="scan-bar-fill-${i}" style="width:0%;background:var(--muted)"></div></div>
+      <div class="scan-stats" id="scan-stats-${i}"><span class="scan-status-msg" id="scan-msg-${i}">Waiting…</span></div>
+    </div>`;
+  item.querySelector(`#scan-btn-${i}`).addEventListener('click',()=>scanChunk(i));
+  $('chunk-list').appendChild(item);
+}
+
+// VT Upload & Poll
+async function uploadChunk(chunk){
+  const formData=new FormData();
+  formData.append('file',chunk.blob,chunk.name);
+  const res=await fetch(VT_UPLOAD,{method:'POST',headers:{'x-apikey':apiKey},body:formData});
+  if(!res.ok){const err=await res.json().catch(()=>({}));throw new Error(err.error?.message||'Upload failed: HTTP '+res.status);}
+  const data=await res.json();
+  return data.data.id;
+}
+
+async function pollAnalysis(analysisId,onUpdate,maxWait=180000){
+  const start=Date.now();
+  while(Date.now()-start<maxWait){
+    await sleep(8000);
+    try{
+      const res=await fetch(VT_ANALYSIS+analysisId,{headers:{'x-apikey':apiKey}});
+      if(!res.ok)continue;
+      const data=await res.json();
+      const status=data.data?.attributes?.status;
+      const stats=data.data?.attributes?.stats;
+      const sha256=data.meta?.file_info?.sha256;
+      onUpdate(status,stats,sha256,analysisId);
+      if(status==='completed')return{stats,sha256,analysisId};
+    }catch(e){continue;}
+  }
+  throw new Error('Scan timed out after 3 minutes');
+}
+
+async function scanChunk(index){
+  if(!apiVerified){showToast('Verify API key first','var(--warn)');return;}
+  const chunk=generatedChunks[index];
+  const scanBtn=$(`scan-btn-${index}`);
+  const resultEl=$(`scan-result-${index}`);
+  const statsEl=$(`scan-stats-${index}`);
+  const msgEl=$(`scan-msg-${index}`);
+  const barFill=$(`scan-bar-fill-${index}`);
+
+  scanBtn.disabled=true;scanBtn.textContent='↑ Uploading…';
+  resultEl.classList.add('show');
+  msgEl.textContent='Uploading to VirusTotal…';
+  barFill.style.width='10%';barFill.style.background='var(--info)';
+
+  try{
+    const analysisId=await uploadChunk(chunk);
+    scanBtn.textContent='◌ Scanning…';
+    msgEl.textContent='Queued for analysis…';
+    barFill.style.width='30%';
+
+    await pollAnalysis(analysisId,(status,stats,sha256,aid)=>{
+      if(status==='completed'&&stats){
+        renderScanStats(statsEl,stats,sha256,aid);
+        barFill.style.width='100%';
+        barFill.style.background=stats.malicious>0?'var(--danger)':'var(--accent)';
+      }else{
+        msgEl.textContent='Status: '+status+'…';
+        barFill.style.width='60%';
+      }
+    });
+    scanBtn.textContent='✓ Done';
+  }catch(e){
+    msgEl.textContent='✗ Error: '+e.message;
+    barFill.style.background='var(--danger)';barFill.style.width='100%';
+    scanBtn.disabled=false;scanBtn.textContent='⬡ Retry';
+    showToast('Scan failed: '+e.message,'var(--danger)');
+  }
+}
+
+function renderScanStats(container,stats,sha256,analysisId){
+  const total=(stats.malicious||0)+(stats.undetected||0)+(stats.suspicious||0)+(stats.harmless||0);
+  const vtLink=sha256?`https://www.virustotal.com/gui/file/${sha256}`:`https://www.virustotal.com/gui/analysis/${analysisId}`;
+  container.innerHTML=`
+    <span class="scan-stat ${stats.malicious>0?'stat-malicious':'stat-clean'}">
+      ${stats.malicious>0?'✗ '+stats.malicious+'/'+total+' engines flagged':'✓ Clean ('+total+' engines)'}
+    </span>
+    ${stats.suspicious>0?`<span class="scan-stat" style="color:var(--warn)">⚠ ${stats.suspicious} suspicious</span>`:''}
+    <a class="vt-link" href="${vtLink}" target="_blank" rel="noopener">View full report ↗</a>`;
+}
+
+// Scan All
+$('scan-all-btn').addEventListener('click',async()=>{
+  if(!apiVerified||generatedChunks.length===0||scanAllRunning)return;
+  scanAllRunning=true;
+  $('scan-all-btn').disabled=true;
+  $('scan-all-btn').textContent='Scanning…';
+
+  for(let i=0;i<generatedChunks.length;i++){
+    const scanBtn=$(`scan-btn-${i}`);
+    if(scanBtn&&!scanBtn.textContent.includes('Done')){
+      await scanChunk(i);
+      if(i<generatedChunks.length-1){
+        for(let s=16;s>0;s--){
+          $('scan-all-btn').textContent=`Next scan in ${s}s…`;
+          await sleep(1000);
+        }
+      }
+    }
+  }
+  scanAllRunning=false;
+  $('scan-all-btn').textContent='✓ All scans complete';
+  showToast('All chunks scanned!');
+});
+
+// Download All
+$('dl-all-btn').addEventListener('click',async()=>{
+  if(!generatedChunks.length)return;
+  $('dl-all-btn').textContent='Downloading…';
+  for(let i=0;i<generatedChunks.length;i++){
+    const{blob,name}=generatedChunks[i];
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');a.href=url;a.download=name;a.click();
+    await sleep(350);URL.revokeObjectURL(url);
+  }
+  $('dl-all-btn').textContent='↓ Download all chunks';
+});
+</script>
+</body>
+</html>
